@@ -1,0 +1,1 @@
+Here is the narrative report for our National Parks final project. The narrative was written by Megan Diller '24, Katelyn McClure '26, and Sydney Stratton '27 in the spring of 2024 for our Introduction to Data Science class at Macalester College in St Paul, MN.
