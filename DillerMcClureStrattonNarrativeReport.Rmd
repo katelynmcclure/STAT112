@@ -1,0 +1,256 @@
+---
+title: "Conservation Status of National Parks Narrative Report"
+author: "Megan Diller, Katelyn McClure, & Sydney Stratton"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+    theme: journal
+    highlight: kate
+---
+
+\
+
+For over a century, Americans have enjoyed and visited National Parks that span our entire country, coast to coast and border to border, even in Hawaii and in Alaska. These parks have become a site of pride and preservation of nature in America, and a way to get people outside and protect natural habitats. In 1973, just over 50 years ago, the United States passed the Endangered Species Act (ESA) to try and protect species that were facing extinction. One of the most famous success stories of the ESA is the Bald Eagle, which nearly went extinct in the 1990’s, but has made a recovery since then, in large part due to the Endangered Species Act. However, despite the success of the ESA, many species still are under threat in the United States.
+
+\
+
+For this project, we explored a dataset that includes most known species in each national park as of 2017, to the best of the ability of those who made the dataset. It includes lots of information about the species, including classification information, conservation status, nativeness to the park, and more. We also have a dataset with information on each national park, including its location and size. We wanted to explore the species dataset to see what patterns might exist with regards to species across different national parks, and national park regions. The questions that we chose to explore were: How do the conservation status of species compare across different national park regions? And, within specific regions, how does the conservation status of species compare across national parks?
+
+\
+
+```{r echo = FALSE, message=FALSE, warning=FALSE}
+# Load in the data
+library(readr)
+library(tidyverse)
+parks <- read_csv("/Users/katelynmcclure/Documents/*COMP 112/Final Project/parks.csv")
+species <- read_csv("/Users/katelynmcclure/Documents/*COMP 112/Final Project/species.csv")
+```
+
+```{r echo = FALSE, message=FALSE}
+# This code renames the columns of the dataset so there are no spaces, making them easier to refer to
+species <- species %>%
+  rename(
+    SpeciesID = `Species ID`,
+    ParkName = `Park Name`,
+    ScientificName = `Scientific Name`,
+    CommonNames = `Common Names`,
+    RecordStatus = `Record Status`,
+    ConservationStatus = `Conservation Status`)
+
+
+parks <- parks %>%
+  rename(
+    ParkCode = `Park Code`,
+    ParkName = `Park Name`)
+```
+
+```{r echo=FALSE, message=FALSE}
+# This code chunk groups the parks into regions as designated by the National Park Service.
+parks <- parks %>%
+  mutate(Region = case_when(State=="AK" ~ "AlaskaRegion", State=="UT" | State=="TX" | State=="CO" | State=="NM" | State=="AZ" | State=="MT" | State=="WY" | State=="ID"| State=="WY, MT, ID" ~ "IntermountainRegion", State=="SD"| State=="OH" | State=="AR"| State=="MI"| State=="ND"| State=="MN" ~ "MidwestRegion", State=="ME" | State=="VA" ~"NortheastRegion", State=="CA"| State=="OR"| State=="NV" | State =="HI" | State=="WA" | State=="CA, NV" ~ "PacificWestRegion", State=="FL" | State=="SC" | State=="TN" | State=="NC" | State=="KY" |State=="TN, NC" ~ "SoutheastRegion" ))
+
+```
+
+
+```{r echo=FALSE, message=FALSE}
+# Joining the "parks" and "species" dataset
+JoinedParksSpecies <- parks %>%
+  full_join(species, by = "ParkName") %>%
+  select(ParkCode, ParkName, Region, SpeciesID, Category, Order, Family, ScientificName, CommonNames, RecordStatus, Occurrence, Nativeness, Seasonality, ConservationStatus, State, Acres, Latitude, Longitude)
+
+# Table with the total number of species for each respective region
+RegionTotal <- JoinedParksSpecies %>%
+  mutate(ConservationStatus = if_else(is.na(ConservationStatus), "N/A", ConservationStatus)) %>% # change the NA values to have the value "N/A" so they are not filtered out in the filter command
+  filter(ConservationStatus != "Breeder" & ConservationStatus != "Migratory" & ConservationStatus != "Proposed Endangered" & ConservationStatus != "Proposed Threatened" & ConservationStatus != "Resident" & ConservationStatus != "Under Review" & ConservationStatus != "Extinct") %>% # filter out the few miscoded species across the dataset (~20 in ~120k) as well as the single Extinct animal in the dataset, a fish that went extinct in the 1980s that has not yet been removed
+  group_by(Region) %>%
+  summarize(regiontotal = n()) 
+
+# Table with the count and proportion of total species for each level of conservation status in each region
+ConservationRegion <- JoinedParksSpecies %>%
+  mutate(ConservationStatus = if_else(is.na(ConservationStatus), "N/A", ConservationStatus)) %>% # same justification as above
+  filter(ConservationStatus != "Breeder" & ConservationStatus != "Migratory" & ConservationStatus != "Proposed Endangered" & ConservationStatus != "Proposed Threatened" & ConservationStatus != "Resident" & ConservationStatus != "Under Review" & ConservationStatus != "Extinct") %>% # same justification as above
+  group_by(ConservationStatus, Region) %>%
+  summarize(count = n()) %>%
+  left_join(RegionTotal, by = "Region") %>%
+  mutate(`prop%` = (count/regiontotal)*100) %>%
+  mutate(`prop%` = round(`prop%`, digits = 2)) %>% # round the percentages to 2 digits after the decimal point
+  select(Region, ConservationStatus, count, `prop%`) 
+
+
+as.data.frame(ConservationRegion) # prints the whole table, not just the first few rows
+```
+
+\
+
+This table we’ve created provides a preliminary understanding of the number of species in each park region that falls under different conservation statuses. While the raw count provides some insight into the prevalence of species with any level of conservation status, we decided that calculating the proportion of each of 5 different conservation levels (Endangered, In Recovery, Species of Concern, Threatened, and N/A) for each region would give a more accurate representation of the prevalence of conservation statuses other than N/A, or not currently threatened to any degree. National Parks can vary vastly in acreage, so larger parks will have more threatened species simply because they have more species to begin with. Additionally, the number of parks in each region vary from 2 in the Northeast Region to 18 in the Intermountain Region. Regions with more parks will have more threatened species, again simply because they have a larger number of species to begin with.
+
+Calculating the proportions reveals that across all six regions, the vast majority of all species are not currently threatened, with around 95-98% of all species being identified as such. Proportionally, the next largest category is the Species of Concern category. Species of Concern are not quite threatened enough to make the Endangered Species list of the ESA, but experts feel as though they could soon qualify. Around 2-5% of the species in our dataset are identified as Species of Concern. The final three ConservationStatus categories, In Recovery, Threatened, and Endangered each make up less than 0.5% of the species in their respective regions. Animals in recovery are growing instead of shrinking in population, while Threatened and Endangered species are declining in population. Despite the tiny proportions and raw numbers of these Threatened and Endangered species, their conservation is still extremely important, as the extinction of species can have negative effects on a park’s biodiversity and ecosystem.
+
+\
+
+```{r fig.height = 6, fig.width = 9, echo = FALSE, message=FALSE}
+#This code chunk creates a bar plot comparing the number of species of different conservation statuses across the park regions
+JoinedParksSpecies %>%
+  filter(!is.na(ConservationStatus), ConservationStatus=='Endangered' | ConservationStatus=='In Recovery' | ConservationStatus=='Species of Concern' | ConservationStatus=='Threatened' | ConservationStatus=='Under Review') %>% 
+  group_by(Region, ConservationStatus) %>% 
+  summarize(count=n()) %>% 
+  ggplot(aes(x=Region, y=count, fill=ConservationStatus)) +
+  geom_col() +
+  scale_color_brewer(palette = "Accent") +
+  labs(title = "Conservation Status of Species in National Park Regions", x = "Park Region", y = "Total Number at Species of Some Level of Concern") +
+  theme_minimal()
+```
+
+\
+
+In the above chart, we compare the number of species in each park region that fall under some type of conservation concern. These categories include endangered, in recovery, species of concern, threatened, and under review. For better viewing, we decided to not include some categories: ‘breeder,’ ‘migratory,’ ‘proposed endangered,’ ‘proposed threatened,’ ‘resident,’ and ‘extinct.’ For some, we did not include them both because of their incredibly few occurrences, and because they seemed like possible errors and not relevant to the category of conservation status. For others, such as extinct, proposed threatened or endangered, we didn’t include them simply because their segments on the bar chart were negligible due to their small numbers. We didn’t include the ‘NA’ occurrences in the chart, since those are species who are not of conservation concern. Therefore, the total number of species on the y axis reflect the total number of species that fall under one of our five categories of concern, not the total number of species in the park. From this chart, we can see that in each region, the largest category by far are species of concern. We also see that the Intermountain and PacificWest regions have significantly higher numbers of species under conservation concern, but this may in part be due to a higher number of parks falling within these regions. 
+
+
+\
+
+The following bar charts show the breakdown of each park within each region. For readability, we decided to use the official 4 letter park code rather than the official name of each park on the x axis. The y axis represents the number of species with some level of concern, again removing the N/A and other negligible categories within the ConservationStatus variable.
+
+\
+
+```{r fig.height = 6, fig.width = 9, echo = FALSE, message=FALSE}
+# In the following code chunks, we've created bar charts for each park region to compare the number of species under threat in each park within the region.
+
+# Alaska Region
+JoinedParksSpecies %>%
+  filter(!is.na(ConservationStatus), ConservationStatus=='Endangered' | ConservationStatus=='In Recovery' | ConservationStatus=='Species of Concern' | ConservationStatus=='Threatened' | ConservationStatus=='Under Review') %>% 
+  filter(Region=="AlaskaRegion") %>% 
+  group_by(ParkCode, ConservationStatus) %>% 
+  summarize(count=n()) %>% 
+  ggplot(aes(x=ParkCode, y=count, fill=ConservationStatus)) +
+  geom_col() +
+  scale_color_brewer(palette = "Accent") +
+  labs(title = "Conservation Status of Species in Alaska Parks", x = "Park Code", y = "Total Number at Species of Some Level of Concern") +
+  theme_minimal()
+```
+
+\
+
+Above shows the breakdown of the 5 conservation statuses of interest in the 8 parks in the Alaska Region.
+
+\
+
+```{r fig.height = 6, fig.width = 9, echo = FALSE, message=FALSE}
+# Intermountain Region
+JoinedParksSpecies %>%
+  filter(!is.na(ConservationStatus), ConservationStatus=='Endangered' | ConservationStatus=='In Recovery' | ConservationStatus=='Species of Concern' | ConservationStatus=='Threatened' | ConservationStatus=='Under Review') %>% 
+  filter(Region=="IntermountainRegion") %>% 
+  group_by(ParkCode, ConservationStatus) %>% 
+  summarize(count=n()) %>% 
+  ggplot(aes(x=ParkCode, y=count, fill=ConservationStatus)) +
+  geom_col() +
+  scale_color_brewer(palette = "Accent") +
+  labs(title = "Conservation Status of Species in Intermountain Parks", x = "Park Code", y = "Total Number at Species of Some Level of Concern") +
+  theme_minimal()
+```
+
+\
+
+Above shows the breakdown of the 5 conservation statuses of interest in the 18 parks in the Intermountain Region.
+
+\
+
+```{r fig.height = 6, fig.width = 9, echo = FALSE, message=FALSE}
+# Midwest Region
+JoinedParksSpecies %>%
+  filter(!is.na(ConservationStatus), ConservationStatus=='Endangered' | ConservationStatus=='In Recovery' | ConservationStatus=='Species of Concern' | ConservationStatus=='Threatened' | ConservationStatus=='Under Review') %>% 
+  filter(Region=="MidwestRegion") %>% 
+  group_by(ParkCode, ConservationStatus) %>% 
+  summarize(count=n()) %>% 
+  ggplot(aes(x=ParkCode, y=count, fill=ConservationStatus)) +
+  geom_col() +
+  scale_color_brewer(palette = "Accent") +
+  labs(title = "Conservation Status of Species in Midwest Parks", x = "Park Code", y = "Total Number at Species of Some Level of Concern") +
+  theme_minimal()
+```
+
+\
+
+Above shows the breakdown of the 5 conservation statuses of interest in the 7 parks in the Midwest Region.
+
+\
+```{r fig.height = 6, fig.width = 9, echo = FALSE, message=FALSE}
+# Northeast Region
+JoinedParksSpecies %>%
+  filter(!is.na(ConservationStatus), ConservationStatus=='Endangered' | ConservationStatus=='In Recovery' | ConservationStatus=='Species of Concern' | ConservationStatus=='Threatened' | ConservationStatus=='Under Review') %>% 
+  filter(Region=="NortheastRegion") %>% 
+  group_by(ParkCode, ConservationStatus) %>% 
+  summarize(count=n()) %>% 
+  ggplot(aes(x=ParkCode, y=count, fill=ConservationStatus)) +
+  geom_col() +
+  scale_color_brewer(palette = "Accent") +
+  labs(title = "Conservation Status of Species in Northeast Parks", x = "Park Code", y = "Total Number at Species of Some Level of Concern") +
+  theme_minimal()
+```
+
+\
+
+Above shows the breakdown of the 5 conservation statuses of interest in the 2 parks in the Northeast Region.
+
+\
+
+```{r fig.height = 6, fig.width = 9, echo = FALSE, message=FALSE}
+# Pacific West Region
+JoinedParksSpecies %>%
+  filter(!is.na(ConservationStatus), ConservationStatus=='Endangered' | ConservationStatus=='In Recovery' | ConservationStatus=='Species of Concern' | ConservationStatus=='Threatened' | ConservationStatus=='Under Review') %>% 
+  filter(Region=="PacificWestRegion") %>% 
+  group_by(ParkCode, ConservationStatus) %>% 
+  summarize(count=n()) %>% 
+  ggplot(aes(x=ParkCode, y=count, fill=ConservationStatus)) +
+  geom_col() +
+  scale_color_brewer(palette = "Accent") +
+  labs(title = "Conservation Status of Species in Pacific West Parks", x = "Park Code", y = "Total Number at Species of Some Level of Concern") +
+  theme_minimal()
+```
+
+\
+
+Above shows the breakdown of the 5 conservation statuses of interest in the 15 parks in the Pacific West Region.
+
+\
+
+```{r fig.height = 6, fig.width = 9, echo = FALSE, message=FALSE}
+# Southeast Region
+JoinedParksSpecies %>%
+  filter(!is.na(ConservationStatus), ConservationStatus=='Endangered' | ConservationStatus=='In Recovery' | ConservationStatus=='Species of Concern' | ConservationStatus=='Threatened' | ConservationStatus=='Under Review') %>% 
+  filter(Region=="SoutheastRegion") %>% 
+  group_by(ParkCode, ConservationStatus) %>% 
+  summarize(count=n()) %>% 
+  ggplot(aes(x=ParkCode, y=count, fill=ConservationStatus)) +
+  geom_col() +
+  scale_color_brewer(palette = "Accent") +
+  labs(title = "Conservation Status of Species in Southeast Parks", x = "Park Code", y = "Total Number at Species of Some Level of Concern") +
+  theme_minimal()
+```
+
+\
+
+Above shows the breakdown of the 5 conservation statuses of interest in the 6 parks in the Southeast Region.
+
+\
+
+When looking at these graphs there are a few distinct patterns that arise. Starting in the Pacific West Region, there is a larger number of endangered species in the two Hawaii National Parks compared to other parks in this region. Another large increase in endangered species occurs in the Intermountain Region. These occur in the Grand Canyon National Park and the Big Bend National Park. These two parks stood out due to their large number of species compared to other parks in the region. This could be due to the park size. In the Alaska region, we were surprised by the consistency in species conservation across all of the parks, especially in the more Northern parks. The last point that caught our interest is in the Midwest Region. We were intrigued by how similar all of the parks species were related in-spite there being a large diversity in park biome. 
+
+\
+
+From the data in this dataset, we found that there are some patterns in the conservation status of species in National Parks that might be interesting to further explore. In future expansions of this project, we would be interested in finding historic datasets to see if there are trends in conservation status over time, and if the Endangered Species Act had an effect on the amount of species falling under some level of concern. We would also like to study conservation policies in different states, and see if this might contribute to differences between the regions. We think that exploring the effectiveness of different conservation policies would help in the creation and enactment of more effective policies to help species conservation, both in National Parks and outside of them.
+
+\
+\
+\
+
+```{r echo = FALSE, message=FALSE}
+# SOURCES
+
+# https://www.kaggle.com/datasets/nationalparkservice/park-biodiversity <- datasets
+
+# https://www.doi.gov/blog/endangered-species-act-celebrating-50-years-success-wildlife-conservation <- information about the Endangered Species Act used in the introduction
+
+# https://www.nps.gov/orgs/1072/visit-the-parks.htm <- information regarding the National Park regions that we manually added to our dataset
+```
+
